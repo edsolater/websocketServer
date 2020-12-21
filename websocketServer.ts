@@ -2,7 +2,7 @@ import * as WebSocket from "ws"
 import { creatId } from "./uuid"
 const wss = new WebSocket.Server({ port: 5000 })
 const connectedWebsockets: { [id: string]: WebSocket } = {}
-type AvailableCommands = "OFFER" | "GIVEID"
+type AvailableCommands = "OFFER" | "USERID"
 type Payload = {
   command: AvailableCommands
   message?: any
@@ -25,20 +25,21 @@ function getFromClient(payloadString: string): Payload {
   return JSON.parse(payloadString)
 }
 
-wss.on("connection", (ws) => {
-  const userId = creatId()
-  connectedWebsockets[userId] = ws
-  sendToClient(ws, { command: "GIVEID", message: { userId } })
-  ws.on("message", handleClientMessage)
-})
 function handleClientMessage(jsonMessage: string) {
   const eventBody = getFromClient(jsonMessage)
   switch (eventBody.command) {
     case "OFFER":
       break
-    case "GIVEID":
+    case "USERID":
       break
     default:
       break
   }
 }
+
+wss.on("connection", (ws) => {
+  const userId = creatId()
+  connectedWebsockets[userId] = ws
+  sendToClient(ws, { command: "USERID", message: { userId } })
+  ws.on("message", handleClientMessage)
+})
