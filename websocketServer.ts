@@ -2,15 +2,15 @@ import * as WebSocket from "ws"
 import { ID } from "./type"
 import { creatId } from "./uuid"
 type Offer = RTCSessionDescriptionInit
-type Answer = string
-type Candidate = string
+type Answer = RTCSessionDescriptionInit
+type Candidate = RTCIceCandidate
 type Identity = "TALKER" | "AUDIENCE"
 const connectedWebsockets = new Map<ID, WebSocket>()
 const members = new Map<ID, Identity>()
 const cache = {
   offer: "" as Offer,
   answer: new Map<ID, Answer>(),
-  candidate: new Map<ID, Candidate>(),
+  candidate: new Map<ID, Candidate[]>(),
 }
 const wss = new WebSocket.Server({ port: 5000 })
 wss.on("connection", initConnect)
@@ -23,7 +23,6 @@ type Commands = {
     receiverID: ID
   }
   JOIN: {}
-  SHOW: {}
   OFFER: { content: Offer }
   ANSWER: { content: Answer }
   CANDIDATE: { content: Candidate }
@@ -107,16 +106,46 @@ function handleClientMessage(
       cache.answer.set(userId, payload.content)
       console.log("把answer发给主播")
 
-      const talkerIds = [...members.entries()].filter(
-        ([_, identity]) => identity === "TALKER"
-      )
-      console.log('[...members.values()]: ', [...members.values()])
-      console.log('talkerIds: ', talkerIds)
-      talkerIds.forEach(([userId]) => {
+      const talkerIds = [...members.entries()]
+        .filter(([_, identity]) => identity === "TALKER")
+        .map(([id]) => id)
+      console.log("[...members.values()]: ", [...members.values()])
+      console.log("talkerIds: ", talkerIds)
+      talkerIds.forEach((userId) => {
         sendToClient(connectedWebsockets.get(userId), "ANSWER", {
           content: payload.content,
         })
       })
+      break
+    }
+    case "CANDIDATE": {
+      console.log("主播/观众发来candidate")
+      const payload = getPayloadFromClient<typeof command>(jsonMessage)
+      cache.candidate.has(userId)
+        ? cache.candidate.get(userId).push(payload.content)
+        : cache.candidate.set(userId, [payload.content])
+
+      const userIdentity = members.get(userId)
+      const talkerIds = [...members.entries()]
+        .filter(([_, identity]) => identity === "TALKER")
+        .map(([id]) => id)
+      const audienceIds = [...members.entries()]
+        .filter(([_, identity]) => identity === "AUDIENCE")
+        .map(([id]) => id)
+      if (userIdentity === "AUDIENCE") {
+        talkerIds.forEach((userId) => {
+          sendToClient(connectedWebsockets.get(userId), "CANDIDATE", {
+            content: payload.content,
+          })
+        })
+      } else {
+        audienceIds.forEach((userId) => {
+          sendToClient(connectedWebsockets.get(userId), "CANDIDATE", {
+            content: payload.content,
+          })
+        })
+      }
+      break
     }
     default:
       break
