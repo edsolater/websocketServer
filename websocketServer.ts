@@ -1,16 +1,8 @@
 import * as WebSocket from "ws"
 import { sendToClient, getMessageFromClient } from "./websocketTransformMethods"
-import { ID } from "./type"
 import { ArbitraryMessagePayload } from "./WebsocketCommand"
+import { getRoomMembers, getWS, recordWSSInfo, removeWSS } from "./room"
 
-type RoomInfo = {
-  wss: Map<ID, WebSocket>
-}
-type Room = {
-  [roomId in ID]: RoomInfo
-}
-//会议房间（最主要的全局变量）
-const rooms: Room = {}
 const wss = new WebSocket.Server({ port: 5000 })
 wss.on("connection", initWebsocketServer)
 
@@ -22,16 +14,9 @@ function initWebsocketServer(ws: WebSocket) {
       websocketMessage: message,
     })
   )
-  // ws.on("close", () => {
-  //   rooms[roomId].connectedWebsockets.delete(userId)
-  //   rooms[roomId].userIdentity.delete(userId)
-  //   const peers = [...rooms[roomId].peers.values()].filter(([aId, bId]) => {
-  //     aId === userId || bId === userId
-  //   })
-  //   peers.forEach((peer) => {
-  //     rooms[roomId].peers.delete(peer)
-  //   })
-  // })
+  ws.on("close", () => {
+    removeWSS(ws)
+  })
 }
 
 function handleClientMessage({
@@ -47,8 +32,8 @@ function handleClientMessage({
     case "JOIN": {
       const roomId = message.payload.roomId
       const clientUserId = message.payload.userId
-      recordWSSInfo(roomId, clientUserId, ws)
-      const roomMembers = [...rooms[roomId].wss.keys()]
+      recordWSSInfo(ws, roomId, clientUserId)
+      const roomMembers = getRoomMembers(roomId)
       sendToClient(ws, "IDENTITY", {
         members: roomMembers,
       })
@@ -57,18 +42,9 @@ function handleClientMessage({
     default: {
       const payload = (message.payload as unknown) as ArbitraryMessagePayload
       const command = (message.command as unknown) as string
-      const roomId = payload.roomId
-      const targetWS = rooms[roomId].wss.get(payload.toUserId)
-      // 单纯地转发
+      const targetWS = getWS(payload.roomId, payload.toUserId)
+      // 转发
       sendToClient(targetWS, command, payload)
     }
-  }
-}
-function recordWSSInfo(roomId: string, userId: string, ws: WebSocket) {
-  if (roomId in rooms) {
-    rooms[roomId].wss =
-      rooms[roomId].wss?.set(userId, ws) ?? new Map([[userId, ws]])
-  } else {
-    rooms[roomId] = { wss: new Map([[userId, ws]]) }
   }
 }

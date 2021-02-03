@@ -2,12 +2,9 @@
  * 需要依照设定
  */
 import * as WebSocket from "ws"
-import { ID } from "./type"
 import {
-  ToServerCommands,
   ClientMessages,
   ArbitraryMessagePayload,
-  OtherCommands,
   ToClientCommands,
 } from "./WebsocketCommand"
 /**
